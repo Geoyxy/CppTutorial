@@ -1,1 +1,10 @@
-.obsidian/
+.obsidian/*
+# 插件启用状态
+!/.obsidian/community-plugins.json
+# 快捷键
+!/.obsidian/hotkeys.json
+# CSS 片段
+!/.obsidian/snippets/
+
+# 资产源文件
+.assets_src/
