@@ -1,0 +1,1 @@
+mmdc -i diagram.mmd -o diagram.pdf -c ai-friendly-config.json -f

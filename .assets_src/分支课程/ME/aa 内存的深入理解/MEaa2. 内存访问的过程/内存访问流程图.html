@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>内存访问过程流程图</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    margin: 0;
+    padding: 24px;
+  }
+  h1 {
+    text-align: center;
+    color: #1a1a2e;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .diagram-container {
+    background: #fff;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    overflow-x: auto;
+  }
+  .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px 30px;
+    margin-top: 20px;
+    padding: 16px 24px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+<h1>内存访问全过程流程图</h1>
+<p class="subtitle">从上下文切换 → 地址转换 → 缺页处理 → 缓存查找的完整链路</p>
+<div class="diagram-container">
+<div class="mermaid">
+flowchart TD
+    %% ========== 第一阶段：上下文切换 ==========
+    Start([开始]) --> S1[操作系统调度器决定切换线程<br/>进程A → 进程B]
+    S1 --> S2[内核保存现场<br/>将进程A的CPU寄存器存入PCB]
+    S2 --> S3[切换地址空间<br/>将进程B的PGD物理地址写入CR3寄存器]
+    S3 --> S4[TLB自动失效冲刷<br/>清除进程A的所有地址映射缓存]
+    S4 --> S5[恢复现场<br/>从进程B的PCB恢复CPU寄存器]
+    S5 --> S6[CPU开始执行进程B的第一条指令]
+
+    %% ========== 第二阶段：执行内存访问指令 ==========
+    S6 --> S7[生成虚拟地址VA<br/>AGU/ALU计算 如 0x7FFF1234]
+    S7 --> S8[切分地址<br/>高位=虚拟页号VPN / 低位=页内偏移Offset]
+    S8 --> S9[VPN发送给MMU请求地址翻译]
+
+    %% ========== 第三阶段：MMU地址转换 ==========
+    S9 --> Q1{TLB中是否<br/>存在VPN条目?}
+
+    %% --- 情况A：TLB命中 ---
+    Q1 -- 命中 --> A1[TLB返回物理页框号PFN<br/>如 0xABCDE]
+    A1 --> A2[拼接物理地址PA<br/>PFN + Offset = 完整PA]
+    A2 --> A3{权限检查<br/>R/W/X, U/S 是否通过?}
+    A3 -- 不通过 --> Crash[程序崩溃]
+    A3 -- 通过 --> F1[L1 缓存查找]
+
+    %% --- 情况B：TLB未命中 ---
+    Q1 -- 未命中 --> B1[启动页表遍历器<br/>Page Table Walker]
+    B1 --> B2[以CR3为起点<br/>在物理内存RAM中逐级遍历]
+    B2 --> B3[第1级 PGD → 获取PUD地址]
+    B3 --> B4[第2级 PUD → 获取PMD地址]
+    B4 --> B5[第3级 PMD → 获取PTE地址]
+    B5 --> B6[第4级 PTE → 读取最终页表项]
+    B6 --> Q2{页表项<br/>Present位?}
+
+    %% --- 子情况B1：页表项有效 ---
+    Q2 -- Present=1 有效 --> C1[从PTE提取PFN<br/>拼接Offset得到PA]
+    C1 --> C2[填充TLB<br/>写入新的 VPN→PFN 映射]
+    C2 --> A3
+
+    %% --- 子情况B2：页表项无效 → 缺页中断 ---
+    Q2 -- Present=0 无效 --> D1[触发 #PF 异常<br/>CPU从用户态切换到内核态]
+    D1 --> D2[缺页中断处理]
+
+    %% ========== 第四阶段A：缺页中断处理 ==========
+    D2 --> D3{内核检查VPN是否在<br/>进程B合法地址空间内?}
+    D3 -- 合法 --> D4[类型1：按需分页 Demand Paging<br/>VPN已申请但从未访问]
+    D4 --> D5[内核分配空闲PFN]
+    D5 --> D6[更新页表项<br/>填入PFN, Present=1, 设置权限位]
+    D6 --> D7[返回用户态重试指令<br/>CPU重新执行触发缺页的指令]
+    D7 --> S7
+
+    D3 -- 非法 --> D8[类型2：非法访问<br/>如NULL指针 / 已释放内存]
+    D8 --> Crash
+
+    %% ========== 第四阶段B：程序崩溃 ==========
+    Crash --> E1[内核向进程发送信号]
+    E1 --> E2{异常类型?}
+    E2 -- 权限错误/非法访问 --> E3[SIGSEGV 段错误]
+    E2 -- 硬件总线错误 --> E4[SIGBUS 总线错误]
+    E3 --> E5{进程是否注册了<br/>自定义信号处理函数?}
+    E4 --> E5
+    E5 -- 是 --> E6[执行自定义处理代码<br/>如崩溃日志上报]
+    E6 --> E7[进程终止, 系统回收资源]
+    E5 -- 否 默认行为 --> E7
+    E7 --> EndCrash([进程结束])
+
+    %% ========== 第五阶段：缓存查找 ==========
+    F1 --> Q3{L1命中?}
+    Q3 -- 命中 --> F2[提取Offset对应数据<br/>加载到CPU寄存器]
+    F2 --> Done([指令执行完成])
+
+    Q3 -- 未命中 --> F3[L2 缓存查找]
+    F3 --> Q4{L2命中?}
+    Q4 -- 命中 --> F4[缓存行填充到L1<br/>数据返回寄存器]
+    F4 --> Done
+
+    Q4 -- 未命中 --> F5[L3 缓存查找]
+    F5 --> Q5{L3命中?}
+    Q5 -- 命中 --> F6[缓存行逐级回填 L2→L1<br/>数据返回寄存器]
+    F6 --> Done
+
+    Q5 -- 未命中 --> F7[访问主存RAM<br/>内存控制器发送读请求 PA]
+    F7 --> F8[RAM返回64字节缓存行<br/>约100ns延迟]
+    F8 --> F9[数据逐级回填 L3→L2→L1<br/>Offset对应数据加载到寄存器]
+    F9 --> Done
+
+    %% ========== 按组件分类的样式定义 ==========
+    %% MMU（内存管理单元）：蓝色系
+    classDef mmu fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a8a
+    %% TLB（旁路转换缓冲）：青色系
+    classDef tlb fill:#cffafe,stroke:#0891b2,stroke-width:2px,color:#164e63
+    %% CPU 缓存：绿色系
+    classDef cache fill:#d1fae5,stroke:#059669,stroke-width:2px,color:#064e3b
+    %% OS 内核：橙色系
+    classDef kernel fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+    %% CPU/逻辑处理器：紫色系
+    classDef cpu fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95
+    %% 成功/完成：浅绿色
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20
+    %% 错误/崩溃：红色
+    classDef error fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#b71c1c
+    %% 终端节点：灰紫色
+    classDef terminal fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
+
+    %% ========== 节点分类 ==========
+
+    %% ----- CPU/逻辑处理器（紫色） -----
+    class S6,S7,S8,F2,F4,F6,F9 cpu
+
+    %% ----- MMU 操作（蓝色）-----
+    %% 包括：地址翻译请求、页表遍历、权限检查、Present位检查
+    class S9,B1,B2,B3,B4,B5,B6,C1,A2,A3,Q2 mmu
+
+    %% ----- TLB 操作（青色） -----
+    %% 包括：TLB冲刷、TLB查询、TLB填充
+    class S4,A1,C2,Q1 tlb
+
+    %% ----- CPU 缓存操作（绿色） -----
+    class F1,F3,F5,F7,F8,Q3,Q4,Q5 cache
+
+    %% ----- OS 内核操作（橙色） -----
+    class S1,S2,S3,S5,D1,D2,D3,D4,D5,D6,D7,D8,E1,E2,E3,E4,E5,E6,E7 kernel
+
+    %% ----- 错误/崩溃（红色） -----
+    class Crash,E1,E3,E4,E6,E7,EndCrash,D8 error
+
+    %% ----- 成功/完成（浅绿色） -----
+    class F2,F4,F6,Done success
+
+    %% ----- 终端节点（灰紫色） -----
+    class Start,EndCrash,Done terminal
+</div>
+</div>
+
+<!-- 图例 -->
+<div class="legend">
+  <span class="legend-item">
+    <span class="legend-color" style="background:#dbeafe;border-color:#2563eb;"></span>
+    MMU（内存管理单元）
+  </span>
+  <span class="legend-item">
+    <span class="legend-color" style="background:#cffafe;border-color:#0891b2;"></span>
+    TLB（旁路转换缓冲）
+  </span>
+  <span class="legend-item">
+    <span class="legend-color" style="background:#d1fae5;border-color:#059669;"></span>
+    CPU 缓存（L1/L2/L3）
+  </span>
+  <span class="legend-item">
+    <span class="legend-color" style="background:#fef3c7;border-color:#d97706;"></span>
+    OS 内核
+  </span>
+  <span class="legend-item">
+    <span class="legend-color" style="background:#ede9fe;border-color:#7c3aed;"></span>
+    CPU / 逻辑处理器
+  </span>
+  <span class="legend-item">
+    <span class="legend-color" style="background:#ffebee;border-color:#d32f2f;"></span>
+    异常 / 错误
+  </span>
+</div>
+
+</body>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 50,
+      rankSpacing: 60
+    },
+    themeVariables: {
+      fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif',
+      fontSize: '14px'
+    }
+  });
+</script>
+</html>

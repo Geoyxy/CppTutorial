@@ -1,0 +1,15 @@
+{
+  "flowchart": {
+    "htmlLabels": false,
+    "useMaxWidth": false
+  },
+  "sequence": {
+    "htmlLabels": false
+  },
+  "classDiagram": {
+    "htmlLabels": false
+  },
+  "themeVariables": {
+    "fontFamily": "Arial, Microsoft YaHei"
+  }
+}
