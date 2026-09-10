@@ -1,0 +1,61 @@
+\documentclass{article}
+\usepackage{ctex}        % 中文支持
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+
+\begin{document}
+
+\title{常见函数增长曲线对比}
+\author{}
+\date{\today}
+\maketitle
+
+\section{函数图像}
+
+下图展示了 $\ln x$、$x$、$x^2$ 和 $2^x$ 在算法规模 $n$ 下的增长趋势对比。
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=13cm,
+    height=9cm,
+    xlabel={算法规模 $n$},
+    ylabel={运行时间 / 操作次数},
+    xmin=0, xmax=10,
+    ymin=0, ymax=100,
+    grid=both,
+    grid style={gray!30},
+    legend style={at={(0.02,0.98)}, anchor=north west, cells={anchor=west}},
+    legend entries={$\ln n$, $n$, $n^2$, $2^n$},
+    samples=200,
+    smooth,
+    no markers,
+    xtick={0,1,2,3,4,5,6,7,8,9,10},
+    ytick={0,10,20,30,40,50,60,70,80,90,100},
+]
+
+% ln x (绿色) - 从0.1开始避免负无穷
+\addplot[domain=0.1:10, thick, color=green!60!black] {ln(x)};
+
+% x (蓝色)
+\addplot[domain=0:10, thick, color=blue] {x};
+
+% x^2 (红色)
+\addplot[domain=0:10, thick, color=red] {x^2};
+
+% 2^x (紫色) - 只画到6.5以免超出y轴范围
+\addplot[domain=0:6.5, thick, color=purple] {2^x};
+
+\end{axis}
+\end{tikzpicture}
+\caption{$\ln n$、$n$、$n^2$、$2^n$ 的增长曲线对比}
+\label{fig:growth}
+\end{figure}
+
+$D={a_i|a_i \in ElemSet, i=1, 2, \dots, n, n\ge0}$
+
+\end{document}
