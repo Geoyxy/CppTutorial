@@ -1,0 +1,12 @@
+.theme-dark {
+  --bold-weight: 900;
+  --bold-color: #ffffff;
+}
+/* 实时预览编辑区 */
+.cm-s-obsidian .cm-strong {
+  font-weight: 900 !important;
+}
+/* 阅读视图 */
+strong {
+  font-weight: 900 !important;
+}
